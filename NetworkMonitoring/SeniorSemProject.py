@@ -6,7 +6,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from PerformanceMonitoring.processor import get_processes
 
-
 keep_going = True
 
 
@@ -124,14 +123,12 @@ def mullvad():
 
 
 def collect_data(vpn_provider_name, vpn_exe_name, vpn_alt_exe_name=None):
-
     with open(f"{vpn_provider_name}.txt", 'w') as f:
         while keep_going:
             process = get_processes(vpn_exe_name, vpn_alt_exe_name)
             if process is not None:
                 row = f"{process.process_name}|{process.process_cpu}|{process.process_memory}\n"
                 f.write(row)
-
 
 
 def main():
