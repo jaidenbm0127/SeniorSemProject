@@ -1,10 +1,13 @@
 import re
 import subprocess
-import sys
 import threading
 import time
 import pandas as pd
 import matplotlib.pyplot as plt
+from PerformanceMonitoring.processor import get_processes
+
+
+keep_going = True
 
 
 def graph_results(results, servers):
@@ -40,20 +43,6 @@ def graph_results(results, servers):
 
     plt.tight_layout()
     plt.show()
-
-
-def loading_animation():
-    while True:
-        sys.stdout.write("Testing network... ")
-        sys.stdout.flush()
-        for i in range(8):
-            sys.stdout.write('\r Testing network... [' + ' ' * i + '*' + ' ' * (7 - i) + ']')
-            sys.stdout.flush()
-            time.sleep(0.1)
-        for i in range(7, -1, -1):
-            sys.stdout.write('\r Testing network... [' + ' ' * i + '*' + ' ' * (7 - i) + ']')
-            sys.stdout.flush()
-            time.sleep(0.1)
 
 
 def run_mullvad_speedtest(server, protocol):
@@ -102,6 +91,10 @@ def run_mullvad_speedtest(server, protocol):
 
 
 def mullvad():
+    mullvad_thread = threading.Thread(target=collect_data, args=("Mullvad", "mullvad-daemon.exe",))
+    mullvad_thread.daemon = True
+    mullvad_thread.start()
+
     # List of servers to test
     servers = ["us nyc", "us dal"]
 
@@ -123,14 +116,26 @@ def mullvad():
 
         time.sleep(3)
 
+    global keep_going
+    keep_going = False
+    mullvad_thread.join()
+
     graph_results(results, servers)
 
 
+def collect_data(vpn_provider_name, vpn_exe_name, vpn_alt_exe_name=None):
+
+    with open(f"{vpn_provider_name}.txt", 'w') as f:
+        while keep_going:
+            process = get_processes(vpn_exe_name, vpn_alt_exe_name)
+            if process is not None:
+                row = f"{process.process_name}|{process.process_cpu}|{process.process_memory}\n"
+                f.write(row)
+
+
+
 def main():
-    # Start the loading animation in a separate thread
-    loading_thread = threading.Thread(target=loading_animation)
-    loading_thread.daemon = True
-    loading_thread.start()
+    mullvad()
 
 
 if __name__ == "__main__":
