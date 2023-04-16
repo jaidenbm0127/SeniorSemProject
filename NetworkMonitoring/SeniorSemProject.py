@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import threading
@@ -7,9 +8,12 @@ import matplotlib.pyplot as plt
 from PerformanceMonitoring.processor import get_processes
 
 keep_going = True
+servers = []
 
 
-def graph_results(results, servers):
+def graph_results(results):
+
+    print("Making results... ")
     # Create a pandas DataFrame from the results
     df = pd.DataFrame(results)
 
@@ -62,9 +66,12 @@ def run_mullvad_speedtest(server, protocol):
     subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     # Wait for the connection to stabilize
-    time.sleep(4)
+    time.sleep(5)
 
-    output = subprocess.check_output(["C:\\Users\\feshhi\\Downloads\\ookla-speedtest-1.2.0-win64\\speedtest"]).decode()
+    print("Running speedtest")
+    resources_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Resources")
+    exe_path = os.path.join(resources_path, "speedtest.exe")
+    output = subprocess.check_output([exe_path]).decode()
 
     print(output)
 
@@ -82,44 +89,55 @@ def run_mullvad_speedtest(server, protocol):
 
     # Extract packet loss
     packet_loss_match = re.search(r"Packet Loss:\s+([\d\.]+)%", output)
-    packet_loss = float(packet_loss_match.group(1))
-
-    return {"server": server, "protocol": protocol, "download": download_speed, "upload": upload_speed,
-            "packet_loss": packet_loss,
-            "latency": idle_latency}
+    try:
+        packet_loss = float(packet_loss_match.group(1))
+        return {"server": server, "protocol": protocol, "download": download_speed, "upload": upload_speed,
+                "packet_loss": packet_loss,
+                "latency": idle_latency}
+    except AttributeError:
+        print("Running again, AttributeError")
+        run_mullvad_speedtest(server, protocol)
 
 
 def mullvad():
+    print("Starting Mullvad daemon... ")
     mullvad_thread = threading.Thread(target=collect_data, args=("Mullvad", "mullvad-daemon.exe",))
     mullvad_thread.daemon = True
     mullvad_thread.start()
 
-    # List of servers to test
-    servers = ["us nyc", "us dal"]
+    mullvad_servers = ["us nyc", "us dal", "us atl", "us lax", "us mia", "us sea", "jp tyo", "au mel", "de fra", "gb "
+                                                                                                                 "lon"]
+
+    for server in mullvad_servers:
+        global servers
+        servers.append(server)
 
     # Start a separate thread for each server
     results = []
-    for server in servers:
+    print("Testing Mullvad WireGuard... ")
+    for server in mullvad_servers:
         results.append(run_mullvad_speedtest(server, "wireguard"))
         # Disconnect from the server
         cmd = "mullvad disconnect"
         subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
-        time.sleep(3)
+        time.sleep(5)
 
-    for server in servers:
+    print("Testing Mullvad OpenVPN... ")
+    for server in mullvad_servers:
         results.append(run_mullvad_speedtest(server, "openvpn"))
         # Disconnect from the server
         cmd = "mullvad disconnect"
         subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
-        time.sleep(3)
+        time.sleep(5)
 
     global keep_going
     keep_going = False
+    print("Joining Logging thread... ")
     mullvad_thread.join()
 
-    graph_results(results, servers)
+    graph_results(results)
 
 
 def collect_data(vpn_provider_name, vpn_exe_name, vpn_alt_exe_name=None):
@@ -132,6 +150,7 @@ def collect_data(vpn_provider_name, vpn_exe_name, vpn_alt_exe_name=None):
 
 
 def main():
+    print("Starting main method now.")
     mullvad()
 
 
